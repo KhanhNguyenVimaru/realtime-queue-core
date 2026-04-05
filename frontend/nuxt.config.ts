@@ -2,7 +2,6 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineNuxtConfig({
   modules: [
-    '@nuxt/eslint',
     '@nuxt/ui'
   ],
 
@@ -12,11 +11,13 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
-  routeRules: {
-    '/': { prerender: true }
-  },
-
   compatibilityDate: '2025-01-15',
+
+  runtimeConfig: {
+    public: {
+      apiBase: 'http://127.0.0.1:8000/api'
+    }
+  },
 
   vite: {
     plugins: [

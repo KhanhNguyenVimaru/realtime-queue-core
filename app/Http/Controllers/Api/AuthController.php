@@ -1,0 +1,288 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Cookie;
+
+class AuthController extends Controller
+{
+    private const REFRESH_COOKIE = 'realtime-queue-core';
+
+    public function register(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users,email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = User::create([
+            'name' => $credentials['name'],
+            'email' => $credentials['email'],
+            'password' => Hash::make($credentials['password']),
+        ]);
+
+        return $this->issueTokenPair($request, [
+            'grant_type' => 'password',
+            'username' => $credentials['email'],
+            'password' => $credentials['password'],
+            'scope' => '',
+        ], $user, 201);
+    }
+
+    public function login(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+        ]);
+
+        $user = User::where('email', $credentials['email'])->first();
+
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['Wrong password.'],
+            ]);
+        }
+
+        return $this->issueTokenPair($request, [
+            'grant_type' => 'password',
+            'username' => $credentials['email'],
+            'password' => $credentials['password'],
+            'scope' => '',
+        ], $user);
+    }
+
+    public function refreshToken(Request $request): JsonResponse
+    {
+        $refreshToken = $request->cookie(self::REFRESH_COOKIE);
+
+        if (! $refreshToken) {
+            return $this->unauthorizedResponse('Refresh token cookie is missing.');
+        }
+
+        $currentRefreshTokenId = $this->getJwtClaim($refreshToken, 'jti');
+        $currentAccessTokenId = $currentRefreshTokenId
+            ? DB::table('oauth_refresh_tokens')->where('id', $currentRefreshTokenId)->value('access_token_id')
+            : null;
+
+        $response = $this->requestPassportToken([
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $refreshToken,
+            'scope' => '',
+        ]);
+
+        if (! $response['ok']) {
+            return $this->unauthorizedResponse('Refresh token is invalid or expired.');
+        }
+
+        if ($currentRefreshTokenId) {
+            $this->revokeRefreshToken($currentRefreshTokenId);
+        }
+
+        if ($currentAccessTokenId) {
+            $this->revokeAccessToken($currentAccessTokenId);
+        }
+
+        $userId = $this->getJwtClaim($response['body']['access_token'], 'sub');
+        $user = $userId ? User::find($userId) : null;
+
+        if (! $user) {
+            return $this->unauthorizedResponse('Authenticated user could not be resolved.');
+        }
+
+        return $this->tokenResponse($request, $response['body'], $user);
+    }
+
+    public function user(Request $request): JsonResponse
+    {
+        return response()->json([
+            'user' => $request->user(),
+        ]);
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $currentAccessTokenId = optional($request->user()?->token())->id;
+        $refreshToken = $request->cookie(self::REFRESH_COOKIE);
+        $refreshTokenId = $refreshToken ? $this->getJwtClaim($refreshToken, 'jti') : null;
+        $refreshAccessTokenId = $refreshTokenId
+            ? DB::table('oauth_refresh_tokens')->where('id', $refreshTokenId)->value('access_token_id')
+            : null;
+
+        if ($currentAccessTokenId) {
+            $this->revokeAccessToken($currentAccessTokenId);
+        }
+
+        if ($refreshTokenId) {
+            $this->revokeRefreshToken($refreshTokenId);
+        }
+
+        if ($refreshAccessTokenId && $refreshAccessTokenId !== $currentAccessTokenId) {
+            $this->revokeAccessToken($refreshAccessTokenId);
+        }
+
+        return response()->json([
+            'message' => 'Successfully logged out.',
+        ])->withCookie($this->expiredRefreshCookie($request));
+    }
+
+    private function issueTokenPair(Request $request, array $payload, User $user, int $status = 200): JsonResponse
+    {
+        $response = $this->requestPassportToken($payload);
+
+        if (! $response['ok']) {
+            return response()->json([
+                'message' => $response['body']['message'] ?? 'Unable to issue tokens.',
+                'errors' => $response['body']['errors'] ?? null,
+            ], $response['status']);
+        }
+
+        return $this->tokenResponse($request, $response['body'], $user, $status);
+    }
+
+    private function tokenResponse(Request $request, array $payload, User $user, int $status = 200): JsonResponse
+    {
+        return response()->json([
+            'access_token' => $payload['access_token'],
+            'token_type' => $payload['token_type'],
+            'expires_at' => now()->addSeconds((int) $payload['expires_in'])->toIso8601String(),
+            'user' => $user,
+        ], $status)->withCookie($this->makeRefreshCookie($request, $payload['refresh_token']));
+    }
+
+    private function requestPassportToken(array $payload): array
+    {
+        $clientId = env('PASSPORT_PASSWORD_CLIENT_ID');
+        $clientSecret = env('PASSPORT_PASSWORD_CLIENT_SECRET');
+
+        if (! $clientId || ! $clientSecret) {
+            return [
+                'ok' => false,
+                'status' => 500,
+                'body' => [
+                    'message' => 'Passport password grant client is not configured.',
+                    'errors' => [
+                        'passport' => [
+                            'Set PASSPORT_PASSWORD_CLIENT_ID and PASSPORT_PASSWORD_CLIENT_SECRET in .env.',
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        $internalRequest = Request::create('/oauth/token', 'POST', array_merge($payload, [
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+        ]));
+
+        $internalRequest->headers->set('Accept', 'application/json');
+
+        $response = app()->handle($internalRequest);
+        $body = json_decode($response->getContent(), true);
+
+        return [
+            'ok' => $response->getStatusCode() >= 200 && $response->getStatusCode() < 300,
+            'status' => $response->getStatusCode(),
+            'body' => is_array($body) ? $body : ['message' => 'Invalid token response.'],
+        ];
+    }
+
+    private function revokeAccessToken(?string $accessTokenId): void
+    {
+        if (! $accessTokenId) {
+            return;
+        }
+
+        DB::table('oauth_access_tokens')
+            ->where('id', $accessTokenId)
+            ->update(['revoked' => true]);
+
+        DB::table('oauth_refresh_tokens')
+            ->where('access_token_id', $accessTokenId)
+            ->update(['revoked' => true]);
+    }
+
+    private function revokeRefreshToken(?string $refreshTokenId): void
+    {
+        if (! $refreshTokenId) {
+            return;
+        }
+
+        DB::table('oauth_refresh_tokens')
+            ->where('id', $refreshTokenId)
+            ->update(['revoked' => true]);
+    }
+
+    private function unauthorizedResponse(string $message): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+        ], 401);
+    }
+
+    private function makeRefreshCookie(Request $request, string $refreshToken): Cookie
+    {
+        return cookie(
+            self::REFRESH_COOKIE,
+            $refreshToken,
+            60 * 24 * 30,
+            '/',
+            config('session.domain'),
+            $request->isSecure() || (bool) config('session.secure'),
+            true,
+            false,
+            config('session.same_site', 'lax'),
+        );
+    }
+
+    private function expiredRefreshCookie(Request $request): Cookie
+    {
+        return cookie(
+            self::REFRESH_COOKIE,
+            '',
+            -1,
+            '/',
+            config('session.domain'),
+            $request->isSecure() || (bool) config('session.secure'),
+            true,
+            false,
+            config('session.same_site', 'lax'),
+        );
+    }
+
+    private function getJwtClaim(string $jwt, string $claim): ?string
+    {
+        $segments = explode('.', $jwt);
+
+        if (count($segments) < 2) {
+            return null;
+        }
+
+        $payload = json_decode($this->base64UrlDecode($segments[1]), true);
+
+        if (! is_array($payload) || ! array_key_exists($claim, $payload)) {
+            return null;
+        }
+
+        return (string) $payload[$claim];
+    }
+
+    private function base64UrlDecode(string $value): string
+    {
+        $remainder = strlen($value) % 4;
+
+        if ($remainder > 0) {
+            $value .= str_repeat('=', 4 - $remainder);
+        }
+
+        return (string) base64_decode(strtr($value, '-_', '+/'));
+    }
+}
