@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: false,
+})
+
 const auth = useAuth()
 const hasSubmitted = ref(false)
 
@@ -65,19 +69,19 @@ async function handleRegister() {
 
             <form class="space-y-5" @submit.prevent="handleRegister">
               <UFormField label="Name" name="name">
-                <UInput v-model="form.name" size="xl" autocomplete="name" />
+                <UInput v-model="form.name" size="xl" autocomplete="name" class="w-full" />
               </UFormField>
 
               <UFormField label="Email" name="email">
-                <UInput v-model="form.email" type="email" size="xl" autocomplete="email" />
+                <UInput v-model="form.email" type="email" size="xl" autocomplete="email" class="w-full" />
               </UFormField>
 
               <UFormField label="Password" name="password">
-                <UInput v-model="form.password" type="password" size="xl" autocomplete="new-password" />
+                <UInput v-model="form.password" type="password" size="xl" autocomplete="new-password" class="w-full" />
               </UFormField>
 
               <UFormField label="Confirm password" name="password_confirmation">
-                <UInput v-model="form.password_confirmation" type="password" size="xl" autocomplete="new-password" />
+                <UInput v-model="form.password_confirmation" type="password" size="xl" autocomplete="new-password" class="w-full" />
               </UFormField>
 
               <UAlert

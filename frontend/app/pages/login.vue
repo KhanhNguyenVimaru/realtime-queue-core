@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: false,
+})
+
 const auth = useAuth()
 const hasSubmitted = ref(false)
 
@@ -59,11 +63,11 @@ async function handleLogin() {
 
             <form class="space-y-5" @submit.prevent="handleLogin">
               <UFormField label="Email" name="email">
-                <UInput v-model="form.email" type="email" size="xl" autocomplete="email" />
+                <UInput v-model="form.email" type="email" size="xl" autocomplete="email" class="w-full" />
               </UFormField>
 
               <UFormField label="Password" name="password">
-                <UInput v-model="form.password" type="password" size="xl" autocomplete="current-password" />
+                <UInput v-model="form.password" type="password" size="xl" autocomplete="current-password" class="w-full" />
               </UFormField>
 
               <UAlert

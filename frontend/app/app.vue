@@ -11,7 +11,7 @@ useHead({
   }
 })
 
-const title = 'Nuxt + Laravel Passport Auth Demo'
+const title = 'Event Signup - Realtime Queue'
 const description = 'Login, register, and authenticated dashboard pages for a Nuxt SPA using Laravel Passport.'
 
 useSeoMeta({
@@ -25,6 +25,8 @@ useSeoMeta({
 
 <template>
   <UApp>
-    <NuxtPage />
+    <NuxtLayout>
+      <NuxtPage />
+    </NuxtLayout>
   </UApp>
 </template>

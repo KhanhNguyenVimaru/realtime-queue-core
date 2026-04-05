@@ -2,6 +2,7 @@ type AuthUser = {
   id: number
   name: string
   email: string
+  role: 'admin' | 'user'
 }
 
 type AuthResponse = {

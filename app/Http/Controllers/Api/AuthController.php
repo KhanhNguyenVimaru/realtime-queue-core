@@ -27,6 +27,7 @@ class AuthController extends Controller
             'name' => $credentials['name'],
             'email' => $credentials['email'],
             'password' => Hash::make($credentials['password']),
+            'role' => 'user',
         ]);
 
         return $this->issueTokenPair($request, [
