@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const auth = useAuth()
+const auth = useAuthStore()
 const colorMode = useColorMode()
 
 const isDark = computed(() => colorMode.value === 'dark')
@@ -69,7 +69,7 @@ function toggleColorMode() {
               color="error"
               variant="soft"
               icon="i-lucide-log-out"
-              :loading="auth.pending.value"
+              :loading="auth.pending"
               @click="handleLogout"
             >
               Logout

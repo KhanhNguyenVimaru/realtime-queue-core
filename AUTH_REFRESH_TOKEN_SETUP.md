@@ -4,7 +4,7 @@
 
 This project is configured with the following authentication model:
 
-- Nuxt stores the `access_token` on the client side.
+- Nuxt stores the `access_token` only in Pinia state (memory). It is not persisted to localStorage.
 - Laravel Passport issues both the `access_token` and the `refresh_token`.
 - The `refresh_token` is never exposed to JavaScript. The backend stores it in an HttpOnly cookie named `realtime-queue-core`.
 - When the frontend requests a refresh, the backend uses Passport's `refresh_token` grant, rotates the refresh token cookie, and revokes the old tokens.
@@ -14,13 +14,14 @@ This project is configured with the following authentication model:
 ```mermaid
 sequenceDiagram
     autonumber
-    participant FE as Frontend (Nuxt)
+    participant FE as Frontend (Nuxt + Pinia)
     participant BE as Backend (Laravel)
     participant DB as DB (Passport)
 
     FE->>BE: POST /api/auth/login (email, password)
     BE->>DB: Verify user + issue access token + refresh token
     BE-->>FE: 200 {access_token, token_type, expires_at, user}
+    FE-->>FE: Save in Pinia state
     BE-->>FE: Set-Cookie realtime-queue-core (HttpOnly)
 
     FE->>BE: GET /api/auth/me\nAuthorization: Bearer <access_token>
@@ -31,11 +32,13 @@ sequenceDiagram
     BE->>DB: Exchange refresh token + rotate refresh token
     BE->>DB: Revoke old access token + old refresh token
     BE-->>FE: 200 {access_token, token_type, expires_at, user}
+    FE-->>FE: Update Pinia state
     BE-->>FE: Set-Cookie realtime-queue-core (rotated)
 
     FE->>BE: POST /api/auth/logout (credentials: include)
     BE->>DB: Revoke current access token + refresh token
     BE-->>FE: 200 {message}
+    FE-->>FE: Clear Pinia state
     BE-->>FE: Set-Cookie realtime-queue-core (expired)
 ```
 
@@ -53,7 +56,7 @@ sequenceDiagram
 - `routes/api.php`: auth API routes
 - `app/Http/Controllers/Api/AuthController.php`: login, register, refresh, logout flow
 - `config/cors.php`: enables credentialed CORS for Nuxt
-- `frontend/app/composables/useAuth.ts`: access token state, auto refresh, logout
+- `frontend/app/stores/auth.ts`: Pinia auth store (access token state, auto refresh, logout)
 - `frontend/app/pages/index.vue`: frontend auth demo page
 - `frontend/nuxt.config.ts`: `NUXT_PUBLIC_API_BASE` support
 
@@ -115,11 +118,16 @@ npm run dev
 
 ## Frontend Behavior
 
-- Login/Register: sends credentials to the backend, receives an `access_token`, and stores it in browser state.
+- Login/Register: sends credentials to the backend, receives an `access_token`, and stores it in Pinia state only.
 - Protected requests: automatically send `Authorization: Bearer <access_token>`.
 - On `401`: the frontend automatically calls `POST /api/auth/refresh-token`.
-- Successful refresh: updates the access token and retries the original request once.
-- Logout: calls the backend to revoke tokens and clears frontend auth state.
+- Successful refresh: updates the access token in Pinia state and retries the original request once.
+- Logout: calls the backend to revoke tokens and clears Pinia auth state.
+
+## Page Reload Behavior
+
+- Because the access token lives only in memory, a full page reload clears it.
+- On first auth check after reload, the app calls `POST /api/auth/refresh-token` using the HttpOnly refresh cookie to restore the session.
 
 ## Security Notes
 

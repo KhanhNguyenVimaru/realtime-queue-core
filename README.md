@@ -1,10 +1,10 @@
 # Realtime Queue Core
 
-Backend Laravel 13 + Laravel Passport, frontend Nuxt 4 + Nuxt UI.
+Laravel 13 backend with Laravel Passport, plus a Nuxt 4 + Nuxt UI frontend.
 
 ## Security
 
-Du an su dung mo hinh `access_token` + `refresh_token` voi refresh token duoc giu trong HttpOnly cookie, giup frontend khong truy cap truc tiep refresh token bang JavaScript. Toan bo luong dang nhap, refresh token, revoke token va cac bien moi truong lien quan duoc mo ta chi tiet tai [AUTH_REFRESH_TOKEN_SETUP.md](AUTH_REFRESH_TOKEN_SETUP.md).
+This project uses an `access_token` + `refresh_token` model. The refresh token is stored in an HttpOnly cookie so the frontend never touches it in JavaScript. The full flow (login, refresh, revoke, and environment requirements) is documented in `AUTH_REFRESH_TOKEN_SETUP.md`.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ Du an su dung mo hinh `access_token` + `refresh_token` voi refresh token duoc gi
 
 ## Setup After Clone
 
-### 1. Clone project
+### 1. Clone the project
 
 ```bash
 git clone <your-repo-url>
@@ -28,13 +28,13 @@ cd laravel-queue-project
 composer install
 ```
 
-### 3. Create Laravel environment file
+### 3. Create the Laravel environment file
 
 ```bash
 copy .env.example .env
 ```
 
-Neu dung macOS/Linux:
+macOS/Linux:
 
 ```bash
 cp .env.example .env
@@ -42,7 +42,7 @@ cp .env.example .env
 
 ### 4. Update Laravel `.env`
 
-Can cau hinh it nhat cac bien sau:
+At minimum, set the following:
 
 ```env
 APP_NAME="Realtime Queue Core"
@@ -72,44 +72,44 @@ PASSPORT_PASSWORD_CLIENT_ID=
 PASSPORT_PASSWORD_CLIENT_SECRET=
 ```
 
-### 5. Generate app key
+### 5. Generate the app key
 
 ```bash
 php artisan key:generate
 ```
 
-### 6. Create database and run migrations
+### 6. Create the database and run migrations
 
-Tao database `laravel_queue_project` trong MySQL truoc, sau do chay:
+Create a MySQL database named `laravel_queue_project`, then run:
 
 ```bash
 php artisan migrate
 ```
 
-### 7. Create Passport password grant client
+### 7. Create the Passport password grant client
 
 ```bash
 php artisan passport:client --password --name="Nuxt Password Grant" --provider=users
 ```
 
-Copy `Client ID` va `Client Secret` vua tao vao:
+Copy the generated values into:
 
 - `PASSPORT_PASSWORD_CLIENT_ID`
 - `PASSPORT_PASSWORD_CLIENT_SECRET`
 
-Sau khi sua `.env`, clear config:
+After updating `.env`, clear config:
 
 ```bash
 php artisan config:clear
 ```
 
-### 8. Seed admin account
+### 8. Seed the admin account
 
 ```bash
 php artisan db:seed
 ```
 
-Tai khoan mac dinh:
+Default credentials:
 
 - Email: `admin@gmail.com`
 - Password: `12345678`
@@ -121,17 +121,17 @@ cd frontend
 npm install
 ```
 
-### 10. Create frontend environment file
+### 10. Create the frontend environment file
 
-Tao file `frontend/.env`:
+Create `frontend/.env`:
 
 ```env
 NUXT_PUBLIC_API_BASE=http://127.0.0.1:8000/api
 ```
 
-### 11. Run project
+### 11. Run the project
 
-Mo 2 terminal.
+Open two terminals.
 
 Backend:
 
@@ -146,10 +146,15 @@ cd frontend
 npm run dev
 ```
 
-Truy cap:
+Access:
 
 - Frontend: `http://localhost:3000`
 - Backend: `http://127.0.0.1:8000`
+
+## Frontend Auth Notes
+
+- The access token is stored only in Pinia state (memory).
+- On page reload, the app restores the session by calling `POST /api/auth/refresh-token` using the HttpOnly refresh cookie.
 
 ## Useful Commands
 
@@ -165,6 +170,6 @@ npm run typecheck
 
 ## Notes
 
-- Neu login bao `Unable to issue tokens.`, hay kiem tra lai `PASSPORT_PASSWORD_CLIENT_ID` va `PASSPORT_PASSWORD_CLIENT_SECRET`.
-- Neu vua doi `.env`, nen chay `php artisan config:clear`.
-- Trang quan ly user chi cho phep tai khoan `role=admin` truy cap.
+- If login returns `Unable to issue tokens.`, verify `PASSPORT_PASSWORD_CLIENT_ID` and `PASSPORT_PASSWORD_CLIENT_SECRET`.
+- After editing `.env`, run `php artisan config:clear`.
+- The users management page is restricted to accounts with `role=admin`.

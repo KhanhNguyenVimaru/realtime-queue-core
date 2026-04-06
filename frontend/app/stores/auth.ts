@@ -1,3 +1,5 @@
+import { defineStore } from 'pinia'
+
 type AuthUser = {
   id: number
   name: string
@@ -24,69 +26,27 @@ type LoginPayload = {
   password: string
 }
 
-const ACCESS_TOKEN_KEY = 'iot_core_access_token'
-const EXPIRES_AT_KEY = 'iot_core_access_token_expires_at'
-const USER_KEY = 'iot_core_user'
-
-export function useAuth() {
+export const useAuthStore = defineStore('auth', () => {
   const config = useRuntimeConfig()
-  const accessToken = useState<string | null>('auth.access-token', () => null)
-  const expiresAt = useState<string | null>('auth.expires-at', () => null)
-  const currentUser = useState<AuthUser | null>('auth.user', () => null)
-  const lastError = useState<string | null>('auth.error', () => null)
-  const initialized = useState<boolean>('auth.initialized', () => false)
-  const pending = useState<boolean>('auth.pending', () => false)
+  const accessToken = ref<string | null>(null)
+  const expiresAt = ref<string | null>(null)
+  const currentUser = ref<AuthUser | null>(null)
+  const lastError = ref<string | null>(null)
+  const initialized = ref(false)
+  const pending = ref(false)
 
   const isAuthenticated = computed(() => Boolean(accessToken.value && currentUser.value))
-
-  function persistSession() {
-    if (!import.meta.client) {
-      return
-    }
-
-    if (accessToken.value) {
-      localStorage.setItem(ACCESS_TOKEN_KEY, accessToken.value)
-    } else {
-      localStorage.removeItem(ACCESS_TOKEN_KEY)
-    }
-
-    if (expiresAt.value) {
-      localStorage.setItem(EXPIRES_AT_KEY, expiresAt.value)
-    } else {
-      localStorage.removeItem(EXPIRES_AT_KEY)
-    }
-
-    if (currentUser.value) {
-      localStorage.setItem(USER_KEY, JSON.stringify(currentUser.value))
-    } else {
-      localStorage.removeItem(USER_KEY)
-    }
-  }
-
-  function hydrateSession() {
-    if (!import.meta.client) {
-      return
-    }
-
-    accessToken.value = localStorage.getItem(ACCESS_TOKEN_KEY)
-    expiresAt.value = localStorage.getItem(EXPIRES_AT_KEY)
-
-    const savedUser = localStorage.getItem(USER_KEY)
-    currentUser.value = savedUser ? JSON.parse(savedUser) as AuthUser : null
-  }
 
   function setSession(payload: AuthResponse) {
     accessToken.value = payload.access_token
     expiresAt.value = payload.expires_at
     currentUser.value = payload.user
-    persistSession()
   }
 
   function clearSession() {
     accessToken.value = null
     expiresAt.value = null
     currentUser.value = null
-    persistSession()
   }
 
   function normalizeError(error: unknown): string {
@@ -219,7 +179,6 @@ export function useAuth() {
     try {
       const response = await request<{ user: AuthUser }>('/auth/me')
       currentUser.value = response.user
-      persistSession()
       return response.user
     } catch (error) {
       lastError.value = normalizeError(error)
@@ -249,8 +208,6 @@ export function useAuth() {
     if (initialized.value) {
       return
     }
-
-    hydrateSession()
 
     if (accessToken.value) {
       try {
@@ -282,4 +239,4 @@ export function useAuth() {
     register,
     request,
   }
-}
+})

@@ -3,7 +3,7 @@ definePageMeta({
   layout: false,
 })
 
-const auth = useAuth()
+const auth = useAuthStore()
 const hasSubmitted = ref(false)
 
 const form = reactive({
@@ -14,10 +14,10 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  auth.lastError.value = null
+  auth.lastError = null
   await auth.initialize()
 
-  if (auth.isAuthenticated.value) {
+  if (auth.isAuthenticated) {
     await navigateTo('/')
   }
 })
@@ -85,15 +85,15 @@ async function handleRegister() {
               </UFormField>
 
               <UAlert
-                v-if="hasSubmitted && auth.lastError.value"
+                v-if="hasSubmitted && auth.lastError"
                 color="error"
                 variant="subtle"
                 title="Registration failed"
-                :description="auth.lastError.value"
+                :description="auth.lastError"
               />
 
               <div class="space-y-3 pt-2">
-                <UButton type="submit" block size="xl" color="primary" :loading="auth.pending.value">
+                <UButton type="submit" block size="xl" color="primary" :loading="auth.pending">
                   Create account
                 </UButton>
                 <UButton to="/login" block size="xl" color="neutral" variant="soft">

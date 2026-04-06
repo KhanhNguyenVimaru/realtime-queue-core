@@ -25,7 +25,7 @@ type UserPayload = {
   role: 'admin' | 'user'
 }
 
-const auth = useAuth()
+const auth = useAuthStore()
 
 const users = ref<UserRow[]>([])
 const pending = ref(false)

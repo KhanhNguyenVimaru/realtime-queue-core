@@ -3,16 +3,16 @@ export default defineNuxtRouteMiddleware(async () => {
     return
   }
 
-  const auth = useAuth()
+  const auth = useAuthStore()
   const toast = useToast()
 
   await auth.initialize()
 
-  if (!auth.isAuthenticated.value) {
+  if (!auth.isAuthenticated) {
     return navigateTo('/login')
   }
 
-  if (auth.currentUser.value?.role !== 'admin') {
+  if (auth.currentUser?.role !== 'admin') {
     toast.add({
       title: 'Access denied',
       description: 'You do not have permission to access this page.',
