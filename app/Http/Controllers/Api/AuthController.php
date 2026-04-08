@@ -85,13 +85,10 @@ class AuthController extends Controller
             return $this->unauthorizedResponse('Refresh token is invalid or expired.');
         }
 
-        if ($currentRefreshTokenId) {
-            $this->revokeRefreshToken($currentRefreshTokenId);
-        }
-
-        if ($currentAccessTokenId) {
-            $this->revokeAccessToken($currentAccessTokenId);
-        }
+        $this->revokeTokenBatch(
+            accessTokenIds: $currentAccessTokenId ? [$currentAccessTokenId] : [],
+            refreshTokenIds: $currentRefreshTokenId ? [$currentRefreshTokenId] : [],
+        );
 
         $userId = $this->getJwtClaim($response['body']['access_token'], 'sub');
         $user = $userId ? User::find($userId) : null;
@@ -140,17 +137,17 @@ class AuthController extends Controller
             ? DB::table('oauth_refresh_tokens')->where('id', $refreshTokenId)->value('access_token_id')
             : null;
 
-        if ($currentAccessTokenId) {
-            $this->revokeAccessToken($currentAccessTokenId);
-        }
+        $accessTokenIds = array_filter([
+            $currentAccessTokenId,
+            $refreshAccessTokenId,
+        ]);
 
-        if ($refreshTokenId) {
-            $this->revokeRefreshToken($refreshTokenId);
-        }
+        $refreshTokenIds = $refreshTokenId ? [$refreshTokenId] : [];
 
-        if ($refreshAccessTokenId && $refreshAccessTokenId !== $currentAccessTokenId) {
-            $this->revokeAccessToken($refreshAccessTokenId);
-        }
+        $this->revokeTokenBatch(
+            accessTokenIds: $accessTokenIds,
+            refreshTokenIds: $refreshTokenIds,
+        );
 
         return response()->json([
             'message' => 'Successfully logged out.',
@@ -183,8 +180,8 @@ class AuthController extends Controller
 
     private function requestPassportToken(array $payload): array
     {
-        $clientId = env('PASSPORT_PASSWORD_CLIENT_ID');
-        $clientSecret = env('PASSPORT_PASSWORD_CLIENT_SECRET');
+        $clientId = config('services.passport.password_client_id') ?? env('PASSPORT_PASSWORD_CLIENT_ID');
+        $clientSecret = config('services.passport.password_client_secret') ?? env('PASSPORT_PASSWORD_CLIENT_SECRET');
 
         if (! $clientId || ! $clientSecret) {
             return [
@@ -218,30 +215,36 @@ class AuthController extends Controller
         ];
     }
 
-    private function revokeAccessToken(?string $accessTokenId): void
+    private function revokeTokenBatch(array $accessTokenIds, array $refreshTokenIds): void
     {
-        if (! $accessTokenId) {
+        $accessTokenIds = array_values(array_unique(array_filter($accessTokenIds)));
+        $refreshTokenIds = array_values(array_unique(array_filter($refreshTokenIds)));
+
+        if ($accessTokenIds === [] && $refreshTokenIds === []) {
             return;
         }
 
-        DB::table('oauth_access_tokens')
-            ->where('id', $accessTokenId)
-            ->update(['revoked' => true]);
+        DB::transaction(function () use ($accessTokenIds, $refreshTokenIds): void {
+            if ($accessTokenIds !== []) {
+                DB::table('oauth_access_tokens')
+                    ->whereIn('id', $accessTokenIds)
+                    ->update(['revoked' => true]);
+            }
 
-        DB::table('oauth_refresh_tokens')
-            ->where('access_token_id', $accessTokenId)
-            ->update(['revoked' => true]);
-    }
+            if ($refreshTokenIds !== [] || $accessTokenIds !== []) {
+                DB::table('oauth_refresh_tokens')
+                    ->where(function ($query) use ($refreshTokenIds, $accessTokenIds): void {
+                        if ($refreshTokenIds !== []) {
+                            $query->whereIn('id', $refreshTokenIds);
+                        }
 
-    private function revokeRefreshToken(?string $refreshTokenId): void
-    {
-        if (! $refreshTokenId) {
-            return;
-        }
-
-        DB::table('oauth_refresh_tokens')
-            ->where('id', $refreshTokenId)
-            ->update(['revoked' => true]);
+                        if ($accessTokenIds !== []) {
+                            $query->orWhereIn('access_token_id', $accessTokenIds);
+                        }
+                    })
+                    ->update(['revoked' => true]);
+            }
+        });
     }
 
     private function unauthorizedResponse(string $message): JsonResponse

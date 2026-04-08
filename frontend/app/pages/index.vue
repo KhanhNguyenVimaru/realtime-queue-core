@@ -159,7 +159,7 @@ async function fetchEvents(options: { page?: number, append?: boolean, filtered?
     const response = await auth.request<{ events: EventRow[], meta: PaginationMeta }>(`/events?${params.toString()}`)
     events.value = append ? [...events.value, ...response.events] : response.events
     const nextJoinedCounts = append ? { ...joinedCounts.value } : {}
-    response.events.forEach((event) => {
+    response.events.forEach((event: EventRow) => {
       nextJoinedCounts[event.id] = event.joined_count ?? 0
     })
     joinedCounts.value = nextJoinedCounts
@@ -173,7 +173,7 @@ async function fetchEvents(options: { page?: number, append?: boolean, filtered?
 }
 
 function setJoinedState(eventId: number, joined: boolean) {
-  const target = events.value.find((event) => event.id === eventId)
+  const target = events.value.find((event: EventRow) => event.id === eventId)
   if (target) {
     target.joined = joined
   }
@@ -268,7 +268,7 @@ onMounted(async () => {
 })
 
 watch(events, (newEvents: EventRow[]) => {
-  const newIds = new Set(newEvents.map((event) => event.id))
+  const newIds = new Set(newEvents.map((event: EventRow) => event.id))
   newIds.forEach((id: number) => subscribeEvent(id))
   Array.from(subscribedIds).forEach((id) => {
     if (!newIds.has(id)) {
