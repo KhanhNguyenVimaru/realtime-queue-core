@@ -8,6 +8,7 @@ type EventRow = {
   title: string
   description: string | null
   img?: string | null
+  limit?: number | null
   starts_at: string | null
   ends_at: string | null
 }
@@ -16,6 +17,15 @@ type EventPayload = {
   title: string
   description: string
   img?: string | null
+  limit: number | null
+  starts_at: string
+  ends_at: string
+}
+
+type EventForm = {
+  title: string
+  description: string
+  limit: string
   starts_at: string
   ends_at: string
 }
@@ -32,9 +42,10 @@ const emit = defineEmits<{
   submit: [payload: EventPayload]
 }>()
 
-const form = reactive<EventPayload>({
+const form = reactive<EventForm>({
   title: '',
   description: '',
+  limit: '',
   starts_at: '',
   ends_at: '',
 })
@@ -72,6 +83,7 @@ watch(
   (event: EventRow | null) => {
     form.title = event?.title ?? ''
     form.description = event?.description ?? ''
+    form.limit = event?.limit != null ? String(event.limit) : ''
     form.starts_at = toLocalInput(event?.starts_at ?? null)
     form.ends_at = toLocalInput(event?.ends_at ?? null)
     uploadFile.value = null
@@ -135,9 +147,11 @@ function applyCrop() {
 }
 
 function submitForm() {
+  const rawLimit = String(form.limit ?? '')
   const payload: EventPayload = {
     title: form.title,
     description: form.description,
+    limit: rawLimit.trim() === '' ? null : Number(rawLimit),
     starts_at: form.starts_at,
     ends_at: form.ends_at,
   }
@@ -179,6 +193,19 @@ function submitForm() {
 
             <UFormField label="Ends at" name="event-end">
               <UInput v-model="form.ends_at" type="datetime-local" class="w-full" />
+            </UFormField>
+
+            <UFormField label="Participant limit" name="event-limit">
+              <UInput
+                v-model="form.limit"
+                type="number"
+                min="1"
+                placeholder="Unlimited"
+                class="w-full"
+              />
+              <template #hint>
+                Leave empty for unlimited.
+              </template>
             </UFormField>
           </div>
 

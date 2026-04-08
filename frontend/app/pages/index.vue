@@ -15,6 +15,7 @@ type EventRow = {
   title: string
   description: string | null
   img?: string | null
+  limit?: number | null
   starts_at: string | null
   ends_at: string | null
   created_at: string | null
@@ -23,14 +24,32 @@ type EventRow = {
   joined?: boolean
 }
 
+type PaginationMeta = {
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+}
+
 const auth = useAuthStore()
 const toast = useToast()
 
 const events = ref<EventRow[]>([])
 const pending = ref(false)
+const loadMorePending = ref(false)
 const pageError = ref('')
 const joinedCounts = ref<Record<number, number>>({})
 const enrollPending = ref<Record<number, boolean>>({})
+
+const perPage = 9
+const currentPage = ref(1)
+const lastPage = ref(1)
+
+const isFilterOpen = ref(false)
+const filterSearch = ref('')
+const filterSortBy = ref<'latest' | 'oldest'>('latest')
+const filterEndDate = ref('')
+const isFiltered = ref(false)
 
 const subscribedIds = new Set<number>()
 
@@ -100,21 +119,56 @@ function setEnrollPending(eventId: number, value: boolean) {
   }
 }
 
-async function fetchEvents() {
-  pending.value = true
+function setPagination(meta: PaginationMeta) {
+  currentPage.value = meta.current_page
+  lastPage.value = meta.last_page
+}
+
+async function fetchEvents(options: { page?: number, append?: boolean, filtered?: boolean } = {}) {
+  const page = options.page ?? 1
+  const append = options.append ?? false
+  const filtered = options.filtered ?? false
+
+  if (append) {
+    loadMorePending.value = true
+  } else {
+    pending.value = true
+  }
   pageError.value = ''
 
+  isFiltered.value = filtered
+
   try {
-    const response = await auth.request<{ events: EventRow[] }>('/events')
-    events.value = response.events
-    joinedCounts.value = response.events.reduce<Record<number, number>>((acc, event) => {
-      acc[event.id] = event.joined_count ?? 0
-      return acc
-    }, {})
+    const params = new URLSearchParams()
+    params.set('per_page', String(perPage))
+    params.set('page', String(page))
+    if (filtered) {
+      const term = filterSearch.value.trim()
+      if (term) {
+        params.set('search', term)
+      }
+      if (filterSortBy.value) {
+        params.set('sort_by', filterSortBy.value)
+      }
+      const endDate = filterEndDate.value.trim()
+      if (endDate) {
+        params.set('end_date', endDate)
+      }
+    }
+
+    const response = await auth.request<{ events: EventRow[], meta: PaginationMeta }>(`/events?${params.toString()}`)
+    events.value = append ? [...events.value, ...response.events] : response.events
+    const nextJoinedCounts = append ? { ...joinedCounts.value } : {}
+    response.events.forEach((event) => {
+      nextJoinedCounts[event.id] = event.joined_count ?? 0
+    })
+    joinedCounts.value = nextJoinedCounts
+    setPagination(response.meta)
   } catch (error) {
     pageError.value = readError(error, 'Unable to load events.')
   } finally {
     pending.value = false
+    loadMorePending.value = false
   }
 }
 
@@ -226,6 +280,35 @@ watch(events, (newEvents: EventRow[]) => {
 onBeforeUnmount(() => {
   Array.from(subscribedIds).forEach((id) => unsubscribeEvent(id))
 })
+
+const hasMore = computed(() => currentPage.value < lastPage.value)
+
+async function loadMore() {
+  if (loadMorePending.value || !hasMore.value) {
+    return
+  }
+
+  await fetchEvents({ page: currentPage.value + 1, append: true, filtered: isFiltered.value })
+}
+
+function applyFilters() {
+  isFilterOpen.value = false
+  fetchEvents({ page: 1, filtered: true })
+}
+
+function resetFilters() {
+  filterSearch.value = ''
+  filterSortBy.value = 'latest'
+  filterEndDate.value = ''
+  isFilterOpen.value = false
+  fetchEvents({ page: 1, filtered: false })
+}
+
+function handleFilterUpdate(payload: { search: string, sortBy: 'latest' | 'oldest', endDate: string }) {
+  filterSearch.value = payload.search
+  filterSortBy.value = payload.sortBy
+  filterEndDate.value = payload.endDate
+}
 </script>
 
 <template>
@@ -234,6 +317,14 @@ onBeforeUnmount(() => {
       <UButton to=  "/events" color="primary" variant="soft" icon="i-lucide-calendar-days">
         My events
       </UButton>
+      <div class="flex gap-2">
+        <UButton color="neutral" variant="soft" icon="i-lucide-filter" @click="isFilterOpen = true">
+          Filter
+        </UButton>
+        <UButton color="neutral" variant="ghost" icon="i-lucide-refresh-ccw" @click="resetFilters">
+          Refresh
+        </UButton>
+      </div>
     </div>
 
     <UAlert
@@ -274,5 +365,26 @@ onBeforeUnmount(() => {
         No events found.
       </UCard>
     </div>
+
+    <div v-if="hasMore && !pending" class="flex justify-center">
+      <UButton
+        color="primary"
+        variant="soft"
+        :loading="loadMorePending"
+        @click="loadMore"
+      >
+        View more
+      </UButton>
+    </div>
+
+    <EventFilterModal
+      v-model:open="isFilterOpen"
+      :search="filterSearch"
+      :sort-by="filterSortBy"
+      :end-date="filterEndDate"
+      @update="handleFilterUpdate"
+      @apply="applyFilters"
+    />
+
   </div>
  </template>

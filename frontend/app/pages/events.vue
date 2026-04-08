@@ -15,18 +15,28 @@ type EventRow = {
   title: string
   description: string | null
   img?: string | null
+  limit?: number | null
   starts_at: string | null
   ends_at: string | null
   created_at: string | null
   updated_at: string | null
+  joined_count?: number
 }
 
 type EventPayload = {
   title: string
   description: string
   img?: string | null
+  limit: number | null
   starts_at: string
   ends_at: string
+}
+
+type PaginationMeta = {
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
 }
 
 const auth = useAuthStore()
@@ -40,18 +50,22 @@ const deleteError = ref('')
 
 const isCreateOpen = ref(false)
 const isEditOpen = ref(false)
-const isDetailOpen = ref(false)
 const editingEvent = ref<EventRow | null>(null)
-const detailEvent = ref<EventRow | null>(null)
 
 const search = ref('')
 const sortBy = ref<'latest' | 'oldest'>('latest')
+const perPage = 10
+const currentPage = ref(1)
+const lastPage = ref(1)
+const totalEvents = ref(0)
 
 const headers = [
   'ID',
   'Title',
   'Starts',
   'Ends',
+  'Limit',
+  'Joined',
   'Actions',
 ]
 
@@ -66,6 +80,19 @@ function formatDate(value: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function isExpired(value: string | null) {
+  if (!value) {
+    return false
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return false
+  }
+
+  return date.getTime() < Date.now()
 }
 
 function readError(error: unknown, fallback: string) {
@@ -107,6 +134,9 @@ function buildQuery() {
     params.set('host_id', String(hostId))
   }
 
+  params.set('per_page', String(perPage))
+  params.set('page', String(currentPage.value))
+
   const query = params.toString()
   return query ? `/events?${query}` : '/events'
 }
@@ -120,8 +150,11 @@ async function fetchEvents() {
   pageError.value = ''
 
   try {
-    const response = await auth.request<{ events: EventRow[] }>(buildQuery())
+    const response = await auth.request<{ events: EventRow[], meta: PaginationMeta }>(buildQuery())
     events.value = response.events
+    currentPage.value = response.meta.current_page
+    lastPage.value = response.meta.last_page
+    totalEvents.value = response.meta.total
   } catch (error) {
     pageError.value = readError(error, 'Unable to load events.')
   } finally {
@@ -152,11 +185,6 @@ function openEditModal(event: EventRow) {
   formError.value = ''
   editingEvent.value = event
   isEditOpen.value = true
-}
-
-function openDetailModal(event: EventRow) {
-  detailEvent.value = event
-  isDetailOpen.value = true
 }
 
 async function updateEvent(payload: EventPayload) {
@@ -267,13 +295,24 @@ watch(search, () => {
   }
 
   searchTimeout = setTimeout(() => {
+    currentPage.value = 1
     fetchEvents()
   }, 350)
 })
 
 watch(sortBy, () => {
+  currentPage.value = 1
   fetchEvents()
 })
+
+function goToPage(page: number) {
+  if (page < 1 || page > lastPage.value || page === currentPage.value) {
+    return
+  }
+
+  currentPage.value = page
+  fetchEvents()
+}
 </script>
 
 <template>
@@ -288,7 +327,7 @@ watch(sortBy, () => {
       <UButton
         color="primary"
         variant="solid"
-        class="md:ml-3 w-fit"
+        class="w-fit"
         icon="i-lucide-arrow-up-down"
         @click="toggleSort"
       >
@@ -298,7 +337,7 @@ watch(sortBy, () => {
       <UButton
         color="primary"
         variant="solid"
-        class="md:ml-3 w-fit"
+        class="w-fit"
         icon="i-lucide-plus"
         @click="isCreateOpen = true"
       >
@@ -351,9 +390,21 @@ watch(sortBy, () => {
               <td class="px-4 py-4">
                 <USkeleton class="h-5 w-32" />
               </td>
+              <td class="px-4 py-4">
+                <USkeleton class="h-5 w-16" />
+              </td>
+              <td class="px-4 py-4">
+                <USkeleton class="h-5 w-16" />
+              </td>
             </tr>
 
-            <tr v-else v-for="event in events" :key="event.id" class="align-top">
+            <tr
+              v-else
+              v-for="event in events"
+              :key="event.id"
+              class="align-top"
+              :class="isExpired(event.ends_at) ? 'bg-error/10' : ''"
+            >
               <td class="px-4 py-4 text-sm text-toned">
                 {{ event.id }}
               </td>
@@ -366,6 +417,12 @@ watch(sortBy, () => {
               <td class="px-4 py-4 text-sm text-toned">
                 {{ formatDate(event.ends_at) }}
               </td>
+              <td class="px-4 py-4 text-sm text-toned">
+                {{ event.limit ?? 'Unlimited' }}
+              </td>
+              <td class="px-4 py-4 text-sm text-toned">
+                {{ event.joined_count ?? 0 }}
+              </td>
               <td class="px-4 py-4">
                 <div class="flex flex-wrap gap-2">
                   <UButton
@@ -373,7 +430,7 @@ watch(sortBy, () => {
                     variant="soft"
                     size="sm"
                     icon="i-lucide-eye"
-                    @click="openDetailModal(event)"
+                    @click="navigateTo({ path: '/event-dashboard', query: { id: event.id } })"
                   >
                     Detail
                   </UButton>
@@ -402,12 +459,38 @@ watch(sortBy, () => {
             </tr>
 
             <tr v-if="!events.length && !pending">
-              <td colspan="5" class="px-4 py-10 text-center text-sm text-muted">
+              <td colspan="6" class="px-4 py-10 text-center text-sm text-muted">
                 No events found.
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-default px-4 py-3 text-sm text-muted">
+        <div>
+          Page {{ currentPage }} / {{ lastPage }} · Total {{ totalEvents }}
+        </div>
+        <div class="flex gap-2">
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :disabled="currentPage <= 1 || pending"
+            @click="goToPage(currentPage - 1)"
+          >
+            Previous
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :disabled="currentPage >= lastPage || pending"
+            @click="goToPage(currentPage + 1)"
+          >
+            Next
+          </UButton>
+        </div>
       </div>
     </UCard>
 
@@ -426,9 +509,5 @@ watch(sortBy, () => {
       @submit="updateEvent"
     />
 
-    <EventDetailModal
-      v-model:open="isDetailOpen"
-      :event="detailEvent"
-    />
   </div>
 </template>

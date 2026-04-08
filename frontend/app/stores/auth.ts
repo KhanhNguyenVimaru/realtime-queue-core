@@ -75,6 +75,9 @@ export const useAuthStore = defineStore('auth', () => {
   async function request<T>(path: string, options: Parameters<typeof $fetch<T>>[1] = {}, retryOnUnauthorized = true): Promise<T> {
     const headers = new Headers(options.headers as HeadersInit | undefined)
 
+    headers.set('Accept', 'application/json')
+    headers.set('X-Requested-With', 'XMLHttpRequest')
+
     if (accessToken.value) {
       headers.set('Authorization', `Bearer ${accessToken.value}`)
     }

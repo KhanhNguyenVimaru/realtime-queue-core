@@ -26,9 +26,20 @@ class StoreEventRequest extends FormRequest
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'img' => ['nullable', 'string', 'max:500000'],
+            'limit' => ['nullable', 'integer', 'min:1'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $limit = $this->input('limit');
+        if ($limit === '') {
+            $this->merge([
+                'limit' => null,
+            ]);
+        }
     }
 
     protected function failedAuthorization()

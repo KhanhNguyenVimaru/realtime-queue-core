@@ -5,6 +5,7 @@ type EventRow = {
   title: string
   description: string | null
   img?: string | null
+  limit?: number | null
   starts_at: string | null
   ends_at: string | null
   created_at: string | null
@@ -22,6 +23,27 @@ const emit = defineEmits<{
   enroll: [event: EventRow]
   leave: [event: EventRow]
 }>()
+
+const isFull = computed(() => {
+  if (props.event.limit == null) {
+    return false
+  }
+
+  return (props.joinedCount ?? 0) >= props.event.limit
+})
+  
+const isExpired = computed(() => {
+  if (!props.event.ends_at) {
+    return false
+  }
+
+  const endDate = new Date(props.event.ends_at)
+  if (Number.isNaN(endDate.getTime())) {
+    return false
+  }
+
+  return endDate.getTime() < Date.now()
+})
 
 function parseDate(value: string | null) {
   if (!value) {
@@ -49,13 +71,19 @@ function formatDate(value: string | null) {
   <UCard
     class="group overflow-hidden shadow-sm ring-1 ring-default transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-black/10 hover:ring-primary/30"
   >
-    <div class="h-36 overflow-hidden bg-muted/10">
+    <div class="relative h-36 overflow-hidden bg-muted/10">
       <img
         v-if="props.event.img"
         :src="props.event.img"
         alt="Event image"
         class="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
       />
+      <div
+        v-else
+        class="flex h-full w-full items-center justify-center bg-muted/10"
+      >
+        <img src="/favicon.ico" alt="Nuxt logo" class="h-10 w-10 opacity-60" />
+      </div>
     </div>
 
     <div class="space-y-2 p-4">
@@ -83,12 +111,13 @@ function formatDate(value: string | null) {
         <UButton
           v-if="!props.joined"
           size="sm"
-          color="primary"
+          :color="isExpired || isFull ? 'neutral' : 'primary'"
           variant="soft"
           :loading="props.enrollPending"
+          :disabled="isExpired || isFull"
           @click="emit('enroll', props.event)"
         >
-          Enroll
+          {{ isExpired ? 'Expired' : (isFull ? 'Full' : 'Enroll') }}
         </UButton>
         <UButton
           v-else
@@ -100,8 +129,17 @@ function formatDate(value: string | null) {
         >
           Leave
         </UButton>
-        <div class="rounded-md bg-muted/30 px-2 py-1 text-xs text-muted">
-          Joined: <span class="font-semibold text-highlighted">{{ props.joinedCount ?? 0 }}</span>
+        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+          <div class="rounded-md bg-muted/30 px-2 py-1">
+            Joined:
+            <span class="font-semibold text-highlighted">{{ props.joinedCount ?? 0 }}</span>
+          </div>
+          <div class="rounded-md bg-muted/30 px-2 py-1">
+            Limit:
+            <span class="font-semibold text-highlighted">
+              {{ props.event.limit ?? 'Unlimited' }}
+            </span>
+          </div>
         </div>
       </div>
     </div>

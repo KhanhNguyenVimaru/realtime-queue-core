@@ -18,9 +18,10 @@ class AdminUserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json([
-            'users' => UserQueryBuilder::buildQuery($request)->get(),
-        ]);
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+        $users = UserQueryBuilder::buildQuery($request)->paginate($perPage);
+
+        return response()->json(paginate_payload($users, 'users'));
     }
 
     public function store(StoreAdminUserRequest $request): JsonResponse

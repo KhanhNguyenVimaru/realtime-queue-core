@@ -28,6 +28,7 @@ Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function (): vo
 Route::middleware('auth:api')->group(function (): void {
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::get('/events/{event}/dashboard', [EventController::class, 'dashboard']);
     Route::post('/events', [EventController::class, 'store']);
     Route::put('/events/{event}', [EventController::class, 'update']);
     Route::delete('/events/{event}', [EventController::class, 'destroy']);

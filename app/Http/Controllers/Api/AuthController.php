@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Jobs\LogUserLogin;
 use App\Models\User;
 use App\Services\AuthService;
 use Illuminate\Http\JsonResponse;
@@ -45,6 +46,13 @@ class AuthController extends Controller
                 'password' => ['Wrong password.'],
             ]);
         }
+
+        LogUserLogin::dispatch(
+            $user->id,
+            $user->email,
+            $request->ip(),
+            $request->userAgent(),
+        );
 
         return $this->issueTokenPair($request, [
             'grant_type' => 'password',

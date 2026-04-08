@@ -8,24 +8,49 @@ use App\Http\Requests\UpdateEventRequest;
 use App\QueryBuilders\EventQueryBuilder;
 use App\Services\EventService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class EventController extends Controller
 {
     public function __construct(private EventService $eventService){
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json([
-            'events' => EventQueryBuilder::buildQuery(request(), request()->user()?->id)->get(),
-        ]);
+        $perPage = max(1, min($request->integer('per_page', 10), 100));
+
+        $events = EventQueryBuilder::buildQuery(
+            $request->only(['search', 'sort_by', 'host_id']),
+            $request->user()?->id
+        )->paginate($perPage);
+
+        return response()->json(paginate_payload($events, 'events'));
     }
 
     public function show(Event $event): JsonResponse
     {
+        $detail = EventQueryBuilder::applyEnrollmentMeta(
+            Event::query()->select(['id', 'host_id', 'title', 'description', 'img', 'limit', 'starts_at', 'ends_at', 'created_at', 'updated_at']),
+            request()->user()?->id
+        )->whereKey($event->id)->firstOrFail();
+
         return response()->json([
-            'event' => $event,
+            'event' => $detail,
         ]);
+    }
+
+    public function dashboard(Request $request, Event $event): JsonResponse
+    {
+        if ($event->host_id !== $request->user()?->id) {
+            return response()->json([
+                'message' => 'Forbidden.',
+            ], 403);
+        }
+
+        $perPage = max(1, min($request->integer('per_page', 10), 50));
+        return response()->json(
+            EventQueryBuilder::buildDashboardPayload($event, $request->user()?->id, $perPage)
+        );
     }
 
     public function store(StoreEventRequest $request): JsonResponse

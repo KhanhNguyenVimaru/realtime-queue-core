@@ -5,6 +5,7 @@ const auth = useAuthStore()
 const colorMode = useColorMode()
 
 const isDark = computed(() => colorMode.value === 'dark')
+const isAdmin = computed(() => auth.currentUser?.role === 'admin')
 
 const accountItems: DropdownMenuItem[][] = [
   [
@@ -65,6 +66,7 @@ function toggleColorMode() {
               color="neutral"
               variant="ghost"
               icon="i-lucide-users"
+              v-if="isAdmin"
             >
               Users
             </UButton>
@@ -77,6 +79,7 @@ function toggleColorMode() {
             >
               Events
             </UButton>
+
 
             <UDropdownMenu :items="accountItems" :content="{ align: 'end' }">
               <UButton

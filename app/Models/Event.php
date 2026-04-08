@@ -18,11 +18,13 @@ class Event extends Model
         'title',
         'description',
         'img',
+        'limit',
         'starts_at',
         'ends_at',
     ];
 
     protected $casts = [
+        'limit' => 'integer',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
     ];
@@ -42,5 +44,10 @@ class Event extends Model
     public function eventUsers(): HasMany
     {
         return $this->hasMany(EventUser::class);
+    }
+
+    public function logs(): HasMany
+    {
+        return $this->hasMany(EventLog::class);
     }
 }

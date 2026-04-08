@@ -52,9 +52,35 @@ if [ "${SKIP_DB_BOOTSTRAP}" != "true" ]; then
   fi
 
   if [ -z "${PASSPORT_PASSWORD_CLIENT_ID}" ] || [ -z "${PASSPORT_PASSWORD_CLIENT_SECRET}" ]; then
+    :
+  else
+    VALID_PASSPORT_CLIENT=$(php -r "
+      \$host = getenv('DB_HOST') ?: 'mysql';
+      \$port = getenv('DB_PORT') ?: '3306';
+      \$db = getenv('DB_DATABASE') ?: 'laravel_queue_project';
+      \$user = getenv('DB_USERNAME') ?: 'root';
+      \$pass = getenv('DB_PASSWORD') ?: 'root';
+      \$clientId = getenv('PASSPORT_PASSWORD_CLIENT_ID');
+      try {
+        \$pdo = new PDO('mysql:host=' . \$host . ';port=' . \$port . ';dbname=' . \$db, \$user, \$pass);
+        \$stmt = \$pdo->prepare('select count(*) from oauth_clients where id = ?');
+        \$stmt->execute([\$clientId]);
+        \$count = (int) \$stmt->fetchColumn();
+        echo \$count > 0 ? '1' : '0';
+      } catch (Exception \$e) {
+        echo '0';
+      }
+    ")
+    if [ "$VALID_PASSPORT_CLIENT" != "1" ]; then
+      PASSPORT_PASSWORD_CLIENT_ID=""
+      PASSPORT_PASSWORD_CLIENT_SECRET=""
+    fi
+  fi
+
+  if [ -z "${PASSPORT_PASSWORD_CLIENT_ID}" ] || [ -z "${PASSPORT_PASSWORD_CLIENT_SECRET}" ]; then
     OUTPUT=$(php artisan passport:client --password --name="Docker Password Grant" --provider=users --no-interaction)
-    CLIENT_ID=$(echo "$OUTPUT" | sed -n "s/.*Client ID: //p")
-    CLIENT_SECRET=$(echo "$OUTPUT" | sed -n "s/.*Client secret: //p")
+    CLIENT_ID=$(echo "$OUTPUT" | sed -n "s/.*Client ID[^0-9A-Za-z-]*//p" | head -n 1)
+    CLIENT_SECRET=$(echo "$OUTPUT" | sed -n "s/.*Client Secret[^0-9A-Za-z-]*//p" | head -n 1)
     if [ -n "$CLIENT_ID" ] && [ -n "$CLIENT_SECRET" ]; then
       for target in "$ENV_FILE" "$ALT_ENV_FILE"; do
         if [ -f "$target" ]; then

@@ -3,17 +3,17 @@
 namespace App\QueryBuilders;
 
 use App\Models\Event;
+use App\Models\EventLog;
 use App\Models\EventUser;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Http\Request;
 
 class EventQueryBuilder
 {
-    public static function buildQuery(Request $request, ?int $userId = null): Builder
+    public static function buildQuery(array $filters, ?int $userId = null): Builder
     {
         $query = static::apply(
-            Event::query()->select(['id', 'host_id', 'title', 'description', 'img', 'starts_at', 'ends_at', 'created_at', 'updated_at']),
-            $request->only(['search', 'sort_by', 'host_id'])
+            Event::query()->select(['id', 'host_id', 'title', 'description', 'img', 'limit', 'starts_at', 'ends_at', 'created_at', 'updated_at']),
+            $filters
         );
 
         return static::applyEnrollmentMeta($query, $userId);
@@ -44,6 +44,11 @@ class EventQueryBuilder
             $query->where('host_id', $hostId);
         }
 
+        $endDate = $filters['end_date'] ?? null;
+        if ($endDate !== null && $endDate !== '') {
+            $query->whereDate('ends_at', $endDate);
+        }
+
         return $query;
     }
 
@@ -68,5 +73,32 @@ class EventQueryBuilder
         }
 
         return $query;
+    }
+
+    public static function buildDashboardPayload(Event $event, ?int $userId, int $perPage): array
+    {
+        $detail = static::applyEnrollmentMeta(
+            Event::query()->select(['id', 'host_id', 'title', 'description', 'img', 'limit', 'starts_at', 'ends_at', 'created_at', 'updated_at']),
+            $userId
+        )
+            ->whereKey($event->id)
+            ->firstOrFail();
+
+        $logs = EventLog::query()
+            ->where('event_id', $event->id)
+            ->with('user:id,name,email')
+            ->latest()
+            ->paginate($perPage);
+
+        return [
+            'event' => $detail,
+            'logs' => $logs->items(),
+            'meta' => [
+                'current_page' => $logs->currentPage(),
+                'last_page' => $logs->lastPage(),
+                'per_page' => $logs->perPage(),
+                'total' => $logs->total(),
+            ],
+        ];
     }
 }

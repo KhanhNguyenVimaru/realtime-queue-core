@@ -54,9 +54,6 @@ async function handleRegister() {
             </p>
           </div>
 
-          <UButton to="/login" color="neutral" variant="soft" size="lg" class="w-fit">
-            Back to login
-          </UButton>
         </div>
 
         <div class="p-6 sm:p-10">
@@ -134,9 +131,6 @@ async function handleRegister() {
               <div class="space-y-3 pt-2">
                 <UButton type="submit" block size="xl" color="primary" :loading="auth.pending">
                   Create account
-                </UButton>
-                <UButton to="/login" block size="xl" color="neutral" variant="soft">
-                  Back to login
                 </UButton>
               </div>
             </form>

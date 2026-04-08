@@ -13,6 +13,7 @@ class EventService
             'title' => $data['title'],
             'description' => $data['description'] ?? null,
             'img' => $data['img'] ?? null,
+            'limit' => $data['limit'] ?? null,
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
         ]);
@@ -27,6 +28,7 @@ class EventService
             'title' => $data['title'],
             'description' => $data['description'] ?? null,
             'img' => $data['img'] ?? null,
+            'limit' => $data['limit'] ?? null,
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
         ]);

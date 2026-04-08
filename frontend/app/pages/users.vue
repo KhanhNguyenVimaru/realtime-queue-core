@@ -25,6 +25,13 @@ type UserPayload = {
   role: 'admin' | 'user'
 }
 
+type PaginationMeta = {
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+}
+
 const auth = useAuthStore()
 const toast = useToast()
 
@@ -41,6 +48,10 @@ const editingUser = ref<UserRow | null>(null)
 const search = ref('')
 const role = ref<'admin' | 'user' | null>(null)
 const sortBy = ref<'latest' | 'oldest'>('latest')
+const perPage = 10
+const currentPage = ref(1)
+const lastPage = ref(1)
+const totalUsers = ref(0)
 
 const roleOptions = [
   { label: 'All roles', value: null },
@@ -108,6 +119,9 @@ function buildQuery() {
     params.set('sort_by', sortBy.value)
   }
 
+  params.set('per_page', String(perPage))
+  params.set('page', String(currentPage.value))
+
   const query = params.toString()
   return query ? `/admin/users?${query}` : '/admin/users'
 }
@@ -121,8 +135,11 @@ async function fetchUsers() {
   pageError.value = ''
 
   try {
-    const response = await auth.request<{ users: UserRow[] }>(buildQuery())
+    const response = await auth.request<{ users: UserRow[], meta: PaginationMeta }>(buildQuery())
     users.value = response.users
+    currentPage.value = response.meta.current_page
+    lastPage.value = response.meta.last_page
+    totalUsers.value = response.meta.total
   } catch (error) {
     pageError.value = readError(error, 'Unable to load users.')
   } finally {
@@ -244,13 +261,24 @@ watch(search, () => {
   }
 
   searchTimeout = setTimeout(() => {
+    currentPage.value = 1
     fetchUsers()
   }, 350)
 })
 
 watch([role, sortBy], () => {
+  currentPage.value = 1
   fetchUsers()
 })
+
+function goToPage(page: number) {
+  if (page < 1 || page > lastPage.value || page === currentPage.value) {
+    return
+  }
+
+  currentPage.value = page
+  fetchUsers()
+}
 </script>
 
 <template>
@@ -269,7 +297,7 @@ watch([role, sortBy], () => {
       <UButton
         color="primary"
         variant="solid"
-        class="md:ml-3 w-fit"
+        class="w-fit"
         icon="i-lucide-arrow-up-down"
         @click="toggleSort"
       >
@@ -383,6 +411,32 @@ watch([role, sortBy], () => {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-default px-4 py-3 text-sm text-muted">
+        <div>
+          Page {{ currentPage }} / {{ lastPage }} · Total {{ totalUsers }}
+        </div>
+        <div class="flex gap-2">
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :disabled="currentPage <= 1 || pending"
+            @click="goToPage(currentPage - 1)"
+          >
+            Previous
+          </UButton>
+          <UButton
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :disabled="currentPage >= lastPage || pending"
+            @click="goToPage(currentPage + 1)"
+          >
+            Next
+          </UButton>
+        </div>
       </div>
     </UCard>
     <UserEditModal
