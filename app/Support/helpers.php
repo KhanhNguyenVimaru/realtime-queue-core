@@ -1,7 +1,25 @@
 <?php
 
+use App\Models\Event;
+use App\Models\EventLog;
 use App\Models\User;
+use App\Events\EventLogCreated;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+
+if (! function_exists('create_event_log')) {
+    function create_event_log(User $user, Event $event, string $action): EventLog
+    {
+        $log = EventLog::create([
+            'event_id' => $event->id,
+            'user_id' => $user->id,
+            'action' => $action,
+        ])->load(['user:id,name,email', 'event:id,title']);
+
+        broadcast(new EventLogCreated($log));
+
+        return $log;
+    }
+}
 
 if (! function_exists('user_payload')) {
     function user_payload(User $user): array

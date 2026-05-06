@@ -80,6 +80,14 @@ function toggleColorMode() {
               Events
             </UButton>
 
+            <UButton
+              to="/logs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-activity"
+            >
+              Logs
+            </UButton>
 
             <UDropdownMenu :items="accountItems" :content="{ align: 'end' }">
               <UButton

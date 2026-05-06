@@ -4,10 +4,8 @@ namespace App\Services;
 
 use App\Jobs\UpdateEventAttendeeCount;
 use App\Models\Event;
-use App\Models\EventLog;
 use App\Models\EventUser;
 use App\Models\User;
-use App\Events\EventLogCreated;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -49,13 +47,7 @@ class EventUserService
                 ['status' => EventUser::STATUS_JOINED],
             );
 
-            $log = EventLog::create([
-                'event_id' => $event->id,
-                'user_id' => $user->id,
-                'action' => 'join',
-            ])->load('user:id,name,email');
-
-            broadcast(new EventLogCreated($log));
+            create_event_log($user, $event, 'join');
             UpdateEventAttendeeCount::dispatch($event->id);
 
             return $eventUser->fresh();
@@ -71,13 +63,7 @@ class EventUserService
 
         if ($eventUser) {
             $eventUser->delete();
-            $log = EventLog::create([
-                'event_id' => $event->id,
-                'user_id' => $user->id,
-                'action' => 'leave',
-            ])->load('user:id,name,email');
-
-            broadcast(new EventLogCreated($log));
+            create_event_log($user, $event, 'leave');
             UpdateEventAttendeeCount::dispatch($event->id);
         }
     }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\EventLogController;
 use App\Http\Controllers\EventUserController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +27,8 @@ Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function (): vo
 });
 
 Route::middleware('auth:api')->group(function (): void {
+    Route::get('/logs', [EventLogController::class, 'index']);
+
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/events/{event}', [EventController::class, 'show']);
     Route::get('/events/{event}/dashboard', [EventController::class, 'dashboard']);
